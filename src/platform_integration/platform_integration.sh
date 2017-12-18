@@ -17,6 +17,7 @@ RESOLV_FILE=/etc/resolv.conf
 
 # Variable assignment
 action=$1
+interval=$2
 
 check_resolv_file(){
     _log "Checking dns_domain"
@@ -55,6 +56,14 @@ generate_agent_cfg(){
     _log "Zabbix Agent config generated"
 }
 
+heartbeat(){
+    while true
+    do
+        zabbix_sender -c /etc/coprocesses/zabbix/zabbix_agentd.conf --key container.state --value 1
+        sleep 10
+    done
+}
+
 setup(){
     _log "Platform integration setup"
     check_resolv_file
@@ -62,7 +71,6 @@ setup(){
     generate_agent_cfg
 }
 
-}
 _log(){
     echo "    $(date -u '+%Y-%m-%d %H:%M:%S') containerpilot: $@"
 }
