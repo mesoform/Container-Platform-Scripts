@@ -60,7 +60,7 @@ heartbeat(){
     while true
     do
         zabbix_sender -c /etc/coprocesses/zabbix/zabbix_agentd.conf --key container.state --value 1
-        sleep 10
+        sleep $interval
     done
 }
 
