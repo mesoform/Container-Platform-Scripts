@@ -15,6 +15,8 @@ ZABBIX_AGENT_PARAMS_PATH=/etc/coprocesses/zabbix/zabbix_agentd.d
 HOSTNAME_FILE=/etc/hostname
 RESOLV_FILE=/etc/resolv.conf
 
+# Variable assignment
+action=$1
 
 check_resolv_file(){
     _log "Checking dns_domain"
@@ -53,12 +55,19 @@ generate_agent_cfg(){
     _log "Zabbix Agent config generated"
 }
 
+setup(){
+    _log "Platform integration setup"
+    check_resolv_file
+    check_hostname
+    generate_agent_cfg
+}
+
+}
 _log(){
     echo "    $(date -u '+%Y-%m-%d %H:%M:%S') containerpilot: $@"
 }
 
-check_resolv_file
-check_hostname
-generate_agent_cfg
+# run specified action
+${action}
 
 exit 0
