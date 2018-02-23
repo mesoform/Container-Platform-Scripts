@@ -37,7 +37,7 @@ check_hostname(){
     container_hostname=$(echo $hostname_string | awk -F. '{print $1}')
     if [ ${container_hostname}.${DNS_DOMAIN} != $(hostname) ]; then
         _log "Updating container hostname"
-        export HOSTNAME=$(hostname).${DNS_DOMAIN}
+        export HOSTNAME=${container_hostname}.${DNS_DOMAIN}
         echo ${HOSTNAME} > ${HOSTNAME_FILE}
         hostname -F ${HOSTNAME_FILE}
         _log "Container hostname updated"
