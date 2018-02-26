@@ -14,37 +14,61 @@ ZABBIX_AGENT_CONF=/etc/coprocesses/zabbix/zabbix_agentd.conf
 ZABBIX_AGENT_PARAMS_PATH=/etc/coprocesses/zabbix/zabbix_agentd.d
 HOSTNAME_FILE=/etc/hostname
 RESOLV_FILE=/etc/resolv.conf
+_HOSTNAME=$(hostname | awk -F. '{print $1}')
+CURRENT_DOMAIN=$(grep domain ${RESOLV_FILE} | awk '{print $2}')
+DEFAULT_DNS_DOMAIN="unset.domain.local"
+_DNS_DOMAIN=${DNS_DOMAIN:-${DEFAULT_DNS_DOMAIN}}
 
 # Variable assignment
 action=$1
 interval=$2
 
+
 check_resolv_file(){
     _log "Checking dns_domain"
-    CURRENT_DOMAIN=$(grep domain ${RESOLV_FILE})
-    if [ $? -eq 1 ]; then
-        _log "dns_domain not set"
-        echo "domain ${DNS_DOMAIN}" >> ${RESOLV_FILE}
-        _log "dns_domain updated"
+    if [ -n "${CURRENT_DOMAIN}" ]; then
+        _log "${RESOLV_FILE} domain already set correctly on host"
     else
-        _log "dns_domain already set correctly on host"
+        set_resolver
     fi
 }
 
 check_hostname(){
     _log "Checking hostname"
-    hostname_string=$(hostname)
-    container_hostname=$(echo $hostname_string | awk -F. '{print $1}')
-    if [ ${container_hostname}.${DNS_DOMAIN} != $(hostname) ]; then
-        _log "Updating container hostname"
-        export HOSTNAME=${container_hostname}.${DNS_DOMAIN}
+    if [ "${HOSTNAME}" == "${_HOSTNAME}.${CURRENT_DOMAIN}" ]; then
+        _log "Container hostname already fully qualified"
+    else
+        set_hostname
+    fi
+}
+
+set_hostname(){
+    _log "Updating container hostname"
+    # make sure we just have the host part
+    export HOSTNAME=${_HOSTNAME}.${CURRENT_DOMAIN}
+    # If we have permissions
+    if [ -n "$(capsh --print | grep cap_sys_admin)" ]; then
+        _log "set the hostname for consistency with agents"
         echo ${HOSTNAME} > ${HOSTNAME_FILE}
         hostname -F ${HOSTNAME_FILE}
-        _log "Container hostname updated"
-    else
-        export HOSTNAME=$(hostname)
-        _log "Container hostname already fully qualified"
     fi
+    # if it is running
+    if [ -n "$(pgrep -a containerpilot)" ]; then
+        _log "update containerpilot's environment"
+        containerpilot -putenv 'HOSTNAME=${HOSTNAME}'
+    fi
+    _log "Container hostname updated"
+
+}
+
+set_resolver(){
+    _log "domain not set in ${RESOLV_FILE}. Updating..."
+    echo "domain ${_DNS_DOMAIN}" >> ${RESOLV_FILE}
+    _log "dns_domain updated"
+    if [ "${_DNS_DOMAIN}" == "${DEFAULT_DNS_DOMAIN}" ]; then
+        _log "WARNING: domain set to ${DEFAULT_DNS_DOMAIN}. If running on Triton, try setting '$DNS_DOMAIN' environment variable"
+    fi
+    CURRENT_DOMAIN=${_DNS_DOMAIN}
 }
 
 generate_agent_cfg(){
@@ -54,14 +78,6 @@ generate_agent_cfg(){
     echo "Server=${EM_SERVER}" > ${ZABBIX_AGENT_PARAMS_PATH}/Server.conf
     echo "ServerActive=${EM_SERVER}" > ${ZABBIX_AGENT_PARAMS_PATH}/ServerActive.conf
     _log "Zabbix Agent config generated"
-}
-
-heartbeat(){
-    while true
-    do
-        zabbix_sender -c /etc/coprocesses/zabbix/zabbix_agentd.conf --key container.state --value 1
-        sleep $interval
-    done
 }
 
 setup(){
@@ -78,4 +94,3 @@ _log(){
 # run specified action
 ${action}
 
-exit 0
