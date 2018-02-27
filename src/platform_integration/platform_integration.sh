@@ -53,7 +53,7 @@ set_hostname(){
         hostname -F ${HOSTNAME_FILE}
     fi
     # if it is running
-    if [ -n "$(pgrep -a containerpilot)" ]; then
+    if [ -n "$(pgrep containerpilot)" ]; then
         _log "update containerpilot's environment"
         containerpilot -putenv 'HOSTNAME=${HOSTNAME}'
     fi
