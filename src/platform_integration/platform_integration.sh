@@ -15,18 +15,29 @@ ZABBIX_AGENT_PARAMS_PATH=/etc/coprocesses/zabbix/zabbix_agentd.d
 HOSTNAME_FILE=/etc/hostname
 RESOLV_FILE=/etc/resolv.conf
 _HOSTNAME=$(hostname | awk -F. '{print $1}')
-CURRENT_DOMAIN=$(grep domain ${RESOLV_FILE} | awk '{print $2}')
 DEFAULT_DNS_DOMAIN="unset.domain.local"
-_DNS_DOMAIN=${DNS_DOMAIN:-${DEFAULT_DNS_DOMAIN}}
 
 # Variable assignment
 action=$1
 interval=$2
 
 
+get_current_domain(){
+    if [ -n $(dnsdomainname) ]; then
+        CURRENT_DOMAIN=$(dnsdomainname)
+        _log "DNS domain name already set"
+    elif [ -n $(grep domain ${RESOLV_FILE} | awk '{print $2}') ]; then
+        CURRENT_DOMAIN=$(grep domain ${RESOLV_FILE} | awk '{print $2}')
+        _log "DNS domain set from ${RESOLV_FILE}"
+    else
+        CURRENT_DOMAIN=${DNS_DOMAIN:-${DEFAULT_DNS_DOMAIN}}
+    fi
+}
+
 check_resolv_file(){
-    _log "Checking dns_domain"
-    if [ -n "${CURRENT_DOMAIN}" ]; then
+    _log "Checking resolvers"
+    RESOLVERS_DOMAIN=$(grep domain ${RESOLV_FILE} | awk '{print $2}')
+    if [ "${CURRENT_DOMAIN}" == "${RESOLVERS_DOMAIN}" ]; then
         _log "${RESOLV_FILE} domain already set correctly on host"
     else
         set_resolver
@@ -63,12 +74,12 @@ set_hostname(){
 
 set_resolver(){
     _log "domain not set in ${RESOLV_FILE}. Updating..."
-    echo "domain ${_DNS_DOMAIN}" >> ${RESOLV_FILE}
+    # TODO: We may need to do a sed for exixting domain config first
+    echo "domain ${CURRENT_DOMAIN}" >> ${RESOLV_FILE}
     _log "dns_domain updated"
-    if [ "${_DNS_DOMAIN}" == "${DEFAULT_DNS_DOMAIN}" ]; then
+    if [ "${CURRENT_DOMAIN}" == "${DEFAULT_DNS_DOMAIN}" ]; then
         _log "WARNING: domain set to ${DEFAULT_DNS_DOMAIN}. If running on Triton, try setting '$DNS_DOMAIN' environment variable"
     fi
-    CURRENT_DOMAIN=${_DNS_DOMAIN}
 }
 
 generate_agent_cfg(){
@@ -82,6 +93,7 @@ generate_agent_cfg(){
 
 setup(){
     _log "Platform integration setup"
+    get_current_domain
     check_resolv_file
     check_hostname
     generate_agent_cfg
@@ -93,4 +105,3 @@ _log(){
 
 # run specified action
 ${action}
-
